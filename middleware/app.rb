@@ -31,7 +31,4 @@ class App
   def body
     errors? ? body_error : curr_time_service.response
   end
-
-
-
 end
