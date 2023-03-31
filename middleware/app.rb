@@ -1,31 +1,37 @@
-require_relative 'time_format'
+require_relative 'current_time_format'
 
 class App
   def call(env)
-    @method = env['REQUEST_METHOD']
-    @path = env['PATH_INFO']
-    @query = URI.decode_www_form_component(env['QUERY_STRING'])
-    [status, headers, body]
+    @request = Rack::Request.new(env)
+    if @request.get? && !@request.params['format'].nil?
+      Rack::Response.new(body, status).finish
+    else
+      Rack::Response.new("Not Found: #{@request.request_method} #{@request.fullpath}", 404).finish
+    end
   end
 
   private
 
-  def status
-    if @method != 'GET' || @path != '/time' || @query.match(/\bformat\b/).length != 1
-      404
-    elsif !TimeFormat.new.check_format(/format=(.+)/.match(@query)[1]).empty?
-      400
-    else
-      200
-    end
+  def curr_time_service
+    curr_time_service ||= CurrentTimeFormat.new.call(@request.params['format'])
   end
 
-  def headers
-    { 'Content-Type' => 'text/plain' }
+  def errors?
+    !curr_time_service.unavailable_formats.length.zero?
+  end
+
+  def status
+    errors? ? 400 : 200
+  end
+
+  def body_error
+    "Unknown time format [#{curr_time_service.unavailable_formats.join(', ')}]"
   end
 
   def body
-    [TimeFormat.new.format(Time.now, /format=(.+)/.match(@query)[1])]
+    errors? ? body_error : curr_time_service.response
   end
+
+
 
 end
